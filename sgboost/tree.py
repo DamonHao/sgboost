@@ -9,11 +9,10 @@ from loss import LABEL_COLUMN, GRAD_COLUMN, HESS_COLUMN
 
 class Tree(object):
 	
-	def __init__(self, max_depth, min_child_weight, colsample_bylevel, min_sample_split, reg_lambda, gamma, num_thread):
+	def __init__(self, max_depth, min_child_weight, colsample_bylevel, reg_lambda, gamma, num_thread):
 		self.max_depth = max_depth
 		self.min_child_weight = min_child_weight
 		self.colsample_bylevel = colsample_bylevel
-		self.min_sample_split = min_sample_split
 		self.reg_lambda = reg_lambda
 		self.gamma = gamma
 		self.num_thread = num_thread
@@ -23,7 +22,7 @@ class Tree(object):
 		self.root_ = self._build(X, Y, self.max_depth)
 	
 	def _build(self, X, Y, max_depth):
-		if max_depth == 0 or X.shape[0] < self.min_sample_split or Y.hess.sum() < self.min_child_weight:
+		if max_depth == 0 or Y.hess.sum() < self.min_child_weight:
 			leaf_score = self._compute_leaf_score(Y)
 			return TreeNode(is_leaf=True, leaf_score=leaf_score)
 		

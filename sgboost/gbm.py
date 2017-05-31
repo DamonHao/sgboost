@@ -20,7 +20,7 @@ class SGBModel(object):
 
 	def __init__(self, loss='logistic', learning_rate=0.3, n_estimators=20, max_depth=6,
 			scale_pos_weight=1, subsample=0.8, colsample_bytree=0.8, colsample_bylevel=0.8,
-			min_child_weight=1, min_sample_split=10, reg_lambda=1.0, gamma=0, num_thread=-1):
+			min_child_weight=1, reg_lambda=1.0, gamma=0, num_thread=-1):
 
 		self.learning_rate = learning_rate
 		self.n_estimators = n_estimators
@@ -30,7 +30,6 @@ class SGBModel(object):
 		self.colsample_bylevel = colsample_bylevel
 		self.reg_lambda = reg_lambda
 		self.gamma = gamma
-		self.min_sample_split = min_sample_split
 		self.num_thread = num_thread
 		self.min_child_weight = min_child_weight
 		self.scale_pos_weight = scale_pos_weight
@@ -47,6 +46,7 @@ class SGBModel(object):
 
 	def fit(self, X, y, eval_metric=None):
 		self.trees = []
+		self.feature_importances_ = {}
 		self.eval_metric = _EVAL_METRIC[eval_metric] if eval_metric else None
 
 		X.reset_index(drop=True, inplace=True)
@@ -70,8 +70,8 @@ class SGBModel(object):
 			Y_feed = data[Y.columns]
 
 			tree = Tree(max_depth=self.max_depth, min_child_weight=self.min_child_weight,
-					colsample_bylevel=self.colsample_bylevel, min_sample_split=self.min_sample_split,
-					reg_lambda=self.reg_lambda, gamma=self.gamma, num_thread=self.num_thread)
+					colsample_bylevel=self.colsample_bylevel, reg_lambda=self.reg_lambda, gamma=self.gamma,
+					num_thread=self.num_thread)
 
 			tree.fit(X_feed, Y_feed)
 
@@ -81,6 +81,13 @@ class SGBModel(object):
 			Y['y_pred'] += self.learning_rate * preds
 			Y[GRAD_COLUMN] = self.loss.grad(Y.y_pred.values, Y.label.values)
 			Y[HESS_COLUMN] = self.loss.hess(Y.y_pred.values, Y.label.values)
+
+			# only compute feature importance in "weight" type, xgboost support two more type "gain" and "cover"
+			for feature, weight in tree.feature_importances_.iteritems():
+				if feature in self.feature_importances_:
+					self.feature_importances_[feature] += weight
+				else:
+					self.feature_importances_[feature] = weight
 
 			self.trees.append(tree)
 
