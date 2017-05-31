@@ -3,10 +3,14 @@
 import numpy as np
 import pandas as pd
 from sklearn.base import RegressorMixin, ClassifierMixin
-from sklearn.metrics import accuracy_score
+from sklearn import metrics
 
 from loss import LABEL_COLUMN, GRAD_COLUMN, HESS_COLUMN, LogisticLoss, SquareLoss
 from tree import Tree
+
+_EVAL_METRIC = {'accuracy': metrics.accuracy_score,
+		'neg_mean_squared_error': metrics.mean_squared_error,
+		'r2': metrics.r2_score}
 
 
 class SGBModel(object):
@@ -32,6 +36,7 @@ class SGBModel(object):
 		self.scale_pos_weight = scale_pos_weight
 		self.first_round_pred = 0.0
 		self.trees = []
+		self.eval_metric = None
 
 		if loss == 'logistic':
 			self.loss = LogisticLoss(reg_lambda)
@@ -40,8 +45,9 @@ class SGBModel(object):
 		else:
 			raise Exception('do not support customize loss')
 
-	def fit(self, X, y):
+	def fit(self, X, y, eval_metric=None):
 		self.trees = []
+		self.eval_metric = _EVAL_METRIC[eval_metric] if eval_metric else None
 
 		X.reset_index(drop=True, inplace=True)
 		y.reset_index(drop=True, inplace=True)
@@ -78,8 +84,11 @@ class SGBModel(object):
 
 			self.trees.append(tree)
 
-			# score = accuracy_score(Y.label.values, self.loss.transform(Y.y_pred.values).round())
-			# print '[SGBoost] train round :{0}, score: {1}'.format(idx, score)
+			if self.eval_metric is None:
+				print '[SGBoost] train round: {0}'.format(idx)
+			else:
+				print '[SGBoost] train round: {0}, eval score: {1}'.format(idx,
+						self._eval_score(Y.label.values, self.loss.transform(Y.y_pred.values)))
 
 	def predict(self, X):
 		assert len(self.trees) > 0
@@ -90,12 +99,20 @@ class SGBModel(object):
 			preds += self.learning_rate * tree.predict(X)
 		return self.loss.transform(preds)
 
+	def _eval_score(self, y_true, y_pred):
+		raise NotImplementedError()
+
 
 class SGBClassifier(SGBModel, ClassifierMixin):
 
 	def predict(self, X):
-		return super(SGBClassifier, self).predict().round()
+		return super(SGBClassifier, self).predict(X).round()
+
+	def _eval_score(self, y_true, y_pred):
+		return self.eval_metric(y_true, y_pred.round())
 
 
 class SGBRegressor(SGBModel, RegressorMixin):
-	pass
+
+	def _eval_score(self, y_true, y_pred):
+		return self.eval_metric(y_true, y_pred)
