@@ -23,10 +23,22 @@ class LogisticLoss(BaseLoss):
 	def transform(self, preds):
 		return 1.0/(1.0+np.exp(-preds))
 
-	def grad(self, preds, labels):
-		preds = self.transform(preds)
-		return (1-labels)/(1-preds) - labels/preds
+	def grad(self, y_preds, y_true):
+		y_preds = self.transform(y_preds)
+		return (1 - y_true) / (1 - y_preds) - y_true / y_preds
 
 	def hess(self,preds, labels):
 		preds = self.transform(preds)
 		return labels/np.square(preds) + (1-labels)/np.square(1-preds)
+
+
+class SquareLoss(BaseLoss):
+
+	def transform(self, y_preds):
+		return y_preds
+
+	def grad(self, y_preds, y_true):
+		return 2 * (y_preds - y_true)
+
+	def hess(self, preds, y_true):
+		return np.full(y_true.shape, 2)

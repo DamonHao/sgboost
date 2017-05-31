@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
 
-from gbm import SGBClassifier
+from gbm import SGBClassifier, SGBRegressor

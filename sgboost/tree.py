@@ -1,28 +1,15 @@
 # -*- coding: utf-8 -*-
-
-import copy_reg
-import types
-
 import numpy as np
-from multiprocessing import Pool
 from functools import partial
 import pandas as pd
 
+from utils import parallel_exec_func
 from loss import LABEL_COLUMN, GRAD_COLUMN, HESS_COLUMN
-
-
-def _pickle_method(m):
-	if m.im_self is None:
-		return getattr, (m.im_class, m.im_func.func_name)
-	else:
-		return getattr, (m.im_self, m.im_func.func_name)
-
-copy_reg.pickle(types.MethodType, _pickle_method)
 
 
 class Tree(object):
 	
-	def __init__(self, max_depth=6, min_child_weight=1, colsample_bylevel=1.0, min_sample_split=10, reg_lambda=1.0, gamma=0.0, num_thread=-1):
+	def __init__(self, max_depth, min_child_weight, colsample_bylevel, min_sample_split, reg_lambda, gamma, num_thread):
 		self.max_depth = max_depth
 		self.min_child_weight = min_child_weight
 		self.colsample_bylevel = colsample_bylevel
@@ -82,12 +69,8 @@ class Tree(object):
 		data = pd.concat([X, Y], axis=1)
 		func = partial(self._find_best_threshold, data)
 
-		# for real parallel in python, use multi-process instead of multi-thread
-		num_process = None if self.num_thread == -1 else self.num_thread
-		pool = Pool(num_process)
-		rets = pool.map(func, cols)
-		pool.close()
-		
+		rets = parallel_exec_func(self.num_thread, func, cols)
+
 		for ret in rets:
 			if ret[2] > best_gain:
 				best_gain = ret[2]
@@ -181,10 +164,7 @@ class Tree(object):
 	def predict(self, X):
 		rows = X.iterrows()
 		func = partial(self._predict, self.root_)
-		num_process = None if self.num_thread == -1 else self.num_thread
-		pool = Pool(num_process)
-		preds = pool.map(func, rows)
-		pool.close()
+		preds = parallel_exec_func(self.num_thread, func, rows)
 		return np.array(preds)
 
 
