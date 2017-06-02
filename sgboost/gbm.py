@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.base import RegressorMixin, ClassifierMixin
 from sklearn import metrics
 
-from loss import LABEL_COLUMN, GRAD_COLUMN, HESS_COLUMN, LogisticLoss, SquareLoss
+from loss import LABEL_COLUMN, GRAD_COLUMN, HESS_COLUMN, LogisticLoss, SquareLoss, CustomLoss
 from tree import Tree
 
 _EVAL_METRIC = {'accuracy': metrics.accuracy_score,
@@ -38,11 +38,14 @@ class SGBModel(object):
 		self.eval_metric = None
 
 		if loss == 'logistic':
-			self.loss = LogisticLoss(reg_lambda)
+			self.loss = LogisticLoss()
 		elif loss == 'square':
-			self.loss = SquareLoss(reg_lambda)
+			self.loss = SquareLoss()
 		else:
-			raise Exception('do not support customize loss')
+			if callable(loss):
+				self.loss = CustomLoss(loss)
+			else:
+				raise Exception('unsupported loss function: {0}'.format(loss))
 
 	def fit(self, X, y, eval_metric=None):
 		self.trees = []
@@ -55,8 +58,7 @@ class SGBModel(object):
 		# Y stores: label, y_pred, grad, hess, sample_weight
 		Y = pd.DataFrame(y.values, columns=[LABEL_COLUMN])
 		Y['y_pred'] = self.first_round_pred
-		Y[GRAD_COLUMN] = self.loss.grad(Y.y_pred.values, Y.label.values)
-		Y[HESS_COLUMN] = self.loss.hess(Y.y_pred.values, Y.label.values)
+		Y[GRAD_COLUMN], Y[HESS_COLUMN] = self.loss.compute_grad_hess(Y.y_pred.values, Y.label.values)
 		# Y['sample_weight'] = 1.0
 		# Y.loc[Y.label == 1, 'sample_weight'] = self.scale_pos_weight
 
@@ -79,8 +81,7 @@ class SGBModel(object):
 			preds = tree.predict(X[X_sample_column.columns])
 
 			Y['y_pred'] += self.learning_rate * preds
-			Y[GRAD_COLUMN] = self.loss.grad(Y.y_pred.values, Y.label.values)
-			Y[HESS_COLUMN] = self.loss.hess(Y.y_pred.values, Y.label.values)
+			Y[GRAD_COLUMN], Y[HESS_COLUMN] = self.loss.compute_grad_hess(Y.y_pred.values, Y.label.values)
 
 			# only compute feature importance in "weight" type, xgboost support two more type "gain" and "cover"
 			for feature, weight in tree.feature_importances_.iteritems():
@@ -95,16 +96,19 @@ class SGBModel(object):
 				print '[SGBoost] train round: {0}'.format(idx)
 			else:
 				print '[SGBoost] train round: {0}, eval score: {1}'.format(idx,
-						self._eval_score(Y.label.values, self.loss.transform(Y.y_pred.values)))
+						self._eval_score(Y.label.values, Y.y_pred.values))
+
+		return self
 
 	def predict(self, X):
 		assert len(self.trees) > 0
-		# TODO: add parallel tree prediction, but now a daemonic process is not allowed to create child processes
+		# TODO: add parallel tree prediction
+		# but now a daemonic process is not allowed to create child processes
 		preds = np.zeros((X.shape[0],))
 		preds += self.first_round_pred
 		for tree in self.trees:
 			preds += self.learning_rate * tree.predict(X)
-		return self.loss.transform(preds)
+		return preds
 
 	def _eval_score(self, y_true, y_pred):
 		raise NotImplementedError()
@@ -113,10 +117,11 @@ class SGBModel(object):
 class SGBClassifier(SGBModel, ClassifierMixin):
 
 	def predict(self, X):
-		return super(SGBClassifier, self).predict(X).round()
+		probs = self.loss.compute_probs(super(SGBClassifier, self).predict(X))
+		return probs.round()
 
 	def _eval_score(self, y_true, y_pred):
-		return self.eval_metric(y_true, y_pred.round())
+		return self.eval_metric(y_true, self.loss.compute_probs(y_pred).round())
 
 
 class SGBRegressor(SGBModel, RegressorMixin):

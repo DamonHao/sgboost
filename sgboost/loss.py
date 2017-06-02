@@ -8,37 +8,35 @@ HESS_COLUMN = 'hess'
 
 
 class BaseLoss(object):
-	def __init__(self, reg_lambda=0.0):
-		self.reg_lambda = reg_lambda
-	
-	def grad(self, preds, labels):
+
+	def compute_grad_hess(self, y_preds, y_trues):
 		raise NotImplementedError()
-	
-	def hess(self, preds, labels):
-		raise NotImplementedError()
-	
+
+	def compute_probs(self, y_preds):
+		return 1.0/(1.0+np.exp(-y_preds))
+
 
 class LogisticLoss(BaseLoss):
-	
-	def transform(self, preds):
-		return 1.0/(1.0+np.exp(-preds))
 
-	def grad(self, y_preds, y_true):
-		y_preds = self.transform(y_preds)
-		return (1 - y_true) / (1 - y_preds) - y_true / y_preds
-
-	def hess(self,preds, labels):
-		preds = self.transform(preds)
-		return labels/np.square(preds) + (1-labels)/np.square(1-preds)
+	def compute_grad_hess(self, y_preds, y_trues):
+		probs = self.compute_probs(y_preds)
+		grads = probs - y_trues
+		hess = probs * (1-probs)
+		return grads, hess
 
 
 class SquareLoss(BaseLoss):
 
-	def transform(self, y_preds):
-		return y_preds
+	def compute_grad_hess(self, y_preds, y_trues):
+		grad = 2 * (y_preds - y_trues)
+		hess = np.full(y_trues.shape, 2)
+		return grad, hess
 
-	def grad(self, y_preds, y_true):
-		return 2 * (y_preds - y_true)
 
-	def hess(self, preds, y_true):
-		return np.full(y_true.shape, 2)
+class CustomLoss(BaseLoss):
+
+	def __init__(self, loss_func):
+		self._loss_func = loss_func
+
+	def compute_grad_hess(self, y_preds, y_trues):
+		return self._loss_func(y_preds, y_trues)
