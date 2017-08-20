@@ -27,3 +27,16 @@ def parallel_exec_func(num_thread, func, iterable):
 	rets = pool.map(func, iterable)
 	pool.close()
 	return rets
+
+
+class _Scorer(object):
+	def __init__(self, score_func, greater_is_better=True):
+		self._score_func = score_func
+		self._sign = 1 if greater_is_better else -1
+
+	def __call__(self, y_true, y_pred):
+		return self._sign * self._score_func(y_true, y_pred)
+
+
+def make_scorer(score_func, greater_is_better=True):
+	return _Scorer(score_func, greater_is_better)
