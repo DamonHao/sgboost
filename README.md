@@ -19,7 +19,7 @@ SGBoost is a simple implement of gradient boosting tree which help to understand
 - pandas(>=0.19.2)
 - numpy(>=1.8.2)
 
-#References
+# References
 
 - Tianqi Chen and Carlos Guestrin. [XGBoost: A Scalable Tree Boosting System](https://arxiv.org/abs/1603.02754). In 22nd SIGKDD Conference on Knowledge Discovery and Data Mining, 2016
 - [Introduction to Boosted Trees](https://homes.cs.washington.edu/~tqchen/pdf/BoostedTree.pdf)
